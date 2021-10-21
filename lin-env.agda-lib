@@ -1,0 +1,4 @@
+name: lin-env
+depend: standard-library
+include: src
+flags: --safe --without-K --postfix-projections
