@@ -67,8 +67,8 @@ module Algebra.Rel.Propositional where
       Carrier : Set
       ε∼_ : Carrier → Set
       [_∙_]∼_ : (x y z : Carrier) → Set
-    open Unit ε∼_
-    open Mult [_∙_]∼_
+    open Unit ε∼_ public
+    open Mult [_∙_]∼_ public
     field
       identityˡ : ∀ {T} → ∀[ ℑ ✴ T ⇔₁ T ]
       identityʳ : ∀ {T} → ∀[ T ✴ ℑ ⇔₁ T ]
@@ -123,8 +123,6 @@ module Algebra.Rel.Propositional where
     }
     where
     open RelMonoid′ M
-    open Unit ε∼_
-    open Mult [_∙_]∼_
     open Equivalence
 
     identityˡ← : ∀ {x y} → x ≡ y → ∃⟨ ε∼_ ∩ [_∙ x ]∼ y ⟩
@@ -162,3 +160,19 @@ module Algebra.Rel.Propositional where
 
   -- I wonder whether the second definition could be a basis for automation of
   -- relational algebra proofs.
+
+  -- Anyway, here's commutative monoids in both styles:
+
+  record RelCommutativeMonoid : Set₁ where
+    field
+      relMonoid : RelMonoid
+    open RelMonoid relMonoid public
+    field
+      comm→ : ∀ {x y z} → [ x ∙ y ]∼ z → [ y ∙ x ]∼ z
+
+  record RelCommutativeMonoid′ : Set₁ where
+    field
+      relMonoid′ : RelMonoid′
+    open RelMonoid′ relMonoid′ public
+    field
+      comm→ : ∀ {T U} → ∀[ T ✴ U ⇒ U ✴ T ]
