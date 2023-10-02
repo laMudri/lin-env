@@ -5,10 +5,13 @@ module List.MALL where
   open import Data.List.Relation.Ternary.Interleaving.Propositional
     hiding (split)
   open import Data.Product
-  open import Function.Base using (_∘_)
+  open import Function.Base using (id; _∘_; _$_)
   open import Level
   open import Relation.Binary.PropositionalEquality as ≡
   open import Relation.Nary
+
+  infix 20 [_]_⊨_
+  [_]_⊨_ = id
 
   module _ where
 
@@ -101,8 +104,9 @@ module List.MALL where
   -- Types & terms
 
   infixr 70 _⊸_
-  infix 20 _⊢_
+  infix 20 _⊢_ _⊨_
   infix 7 _✴_
+  infixr 6 _─✴_
 
   data Ty : Set where
     ι : Ty
@@ -115,13 +119,14 @@ module List.MALL where
       A B C : Ty
       Γ Δ Θ Γ0 Γ1 Δ0 Δ1 : List Ty
 
-  OpenType = Ctx → Set
+  OpenType : ∀ ℓ → Set (suc ℓ)
+  OpenType ℓ = Ctx → Set ℓ
 
-  _─OpenFam : Set → Set₁
-  I ─OpenFam = Ctx → I → Set
-  OpenFam = Ty ─OpenFam
+  _─OpenFam_ : ∀ {i} → Set i → ∀ ℓ → Set (i ⊔ suc ℓ)
+  I ─OpenFam ℓ = Ctx → I → Set ℓ
+  OpenFam = Ty ─OpenFam_
 
-  record _✴_ (T U : OpenType) (Γ : Ctx) : Set where
+  record _✴_ {ℓ} (T U : OpenType ℓ) (Γ : Ctx) : Set ℓ where
     constructor _✴⟨_,_⟩
     field
       {ΓT ΓU} : Ctx
@@ -129,7 +134,17 @@ module List.MALL where
       T-prf : T ΓT
       U-prf : U ΓU
 
-  data _⊢_ : OpenFam where
+  record _─✴_ {ℓ} (T U : OpenType ℓ) (Γ : Ctx) : Set ℓ where
+    constructor lam✴
+    field app✴ : ∀ {ΓT ΓU} → [ ΓT , Γ ]≈ ΓU → T ΓT → U ΓU
+  open _─✴_ public
+
+  eval✴ : ∀ {ℓ} {T U : OpenType ℓ} → ∀[ (T ─✴ U) ✴ T ⇒ U ]
+  eval✴ (sp ✴⟨ f , t ⟩) = f .app✴ ([-,-]≈-comm sp) t
+    -- The need for commutativity here stems from using cons-lists for contexts
+    -- in conjunction with functions which take arguments to their right.
+
+  data _⊢_ : OpenFam 0ℓ where
     var : ∀[ _∋ A ⇒ _⊢ A ]
     ⊸I : ∀[ _⊢ B ∘ (A ∷_) ⇒ _⊢ A ⊸ B ]
     ⊸E : ∀[ (_⊢ A ⊸ B ✴ _⊢ A) ⇒ _⊢ B ]
@@ -137,7 +152,7 @@ module List.MALL where
   -- Environments
 
   -- [_]_⇒ᵉ_ : Ty ─OpenFam → Ctx ─OpenFam
-  record [_]_⇒ᵉ_ (𝓥 : OpenFam) (Γ Δ : Ctx) : Set where
+  record [_]_⇒ᵉ_ {ℓ} (𝓥 : OpenFam ℓ) (Γ Δ : Ctx) : Set ℓ where
     constructor env
     field
       {Γs} : List Ctx
@@ -147,7 +162,7 @@ module List.MALL where
 
   private
     variable
-      𝓥 : OpenFam
+      𝓥 : OpenFam 0ℓ
 
   lookup : [ 𝓥 ] Γ ⇒ᵉ Δ → Δ ∋ A → 𝓥 Γ A
   lookup (env (is ∷ []) (v ∷ [])) (refl ∷ [])
@@ -180,7 +195,11 @@ module List.MALL where
     let _ , v,ρ1 , ,ρ0 = [-,[-,-]]≈[[-,-],-] (_ , v,ρ , [-,-]≈-comm ρ0,ρ1) in
     _ , _ , [-,-]≈-comm ,ρ0 , ρ0 , consᵉ v,ρ1 v ρ1
 
-  record Kit (𝓥 : OpenFam) : Set where
+  idᵉ : (∀ A → 𝓥 (A ∷ []) A) → [ 𝓥 ] Γ ⇒ᵉ Γ
+  idᵉ {Γ = []} v = []ᵉ []
+  idᵉ {Γ = x ∷ Γ} v = consᵉ (consˡ (right (Pw.refl ≡.refl))) (v _) (idᵉ v)
+
+  record Kit (𝓥 : OpenFam 0ℓ) : Set where
     field
       vr : ∀[ _∋_ {A = Ty} ⇒ 𝓥 ]
       tm : ∀[ 𝓥 ⇒ _⊢_ ]
@@ -194,3 +213,55 @@ module List.MALL where
     trav ρ (⊸E (sp ✴⟨ M , N ⟩)) =
       let _ , _ , sp′ , ρM , ρN = ,-env (_ , ρ , sp) in
       ⊸E (sp′ ✴⟨ trav ρM M , trav ρN N ⟩)
+
+  record Sem (𝓥 𝓒 : OpenFam 0ℓ) : Set where
+    field
+      ⟦var⟧ : ∀[ 𝓥 ⇒ 𝓒 ]
+      ⟦⊸I⟧ : ∀ {A B} → ∀[ ([ 𝓥 ]_⊨ A ─✴ [ 𝓒 ]_⊨ B) ⇒ [ 𝓒 ]_⊨ A ⊸ B ]
+      ⟦⊸E⟧ : ∀ {A B} → ∀[ [ 𝓒 ]_⊨ A ⊸ B ✴ [ 𝓒 ]_⊨ A ⇒ [ 𝓒 ]_⊨ B ]
+
+    sem : [ 𝓥 ] Γ ⇒ᵉ Δ → Δ ⊢ A → 𝓒 Γ A
+    sem ρ (var v) = ⟦var⟧ (lookup ρ v)
+    sem ρ (⊸I M) = ⟦⊸I⟧ (lam✴ λ sp v → sem (consᵉ sp v ρ) M)
+    sem ρ (⊸E (sp ✴⟨ M , N ⟩)) =
+      let _ , _ , sp′ , ρM , ρN = ,-env (_ , ρ , sp) in
+      ⟦⊸E⟧ (sp′ ✴⟨ sem ρM M , sem ρN N ⟩)
+
+  data _NE⊢_ : OpenFam 0ℓ
+  data _NF⊢_ : OpenFam 0ℓ
+
+  data _NE⊢_ where
+    var : ∀[ _∋ A ⇒ _NE⊢ A ]
+    ⊸E : ∀[ (_NE⊢ A ⊸ B ✴ _NF⊢ A) ⇒ _NE⊢ B ]
+
+  data _NF⊢_ where
+    emb : ∀[ _NE⊢_ ⇒ _NF⊢_ ]
+    ⊸I : ∀[ _NF⊢ B ∘ (A ∷_) ⇒ _NF⊢ A ⊸ B ]
+
+  _⊨_ : OpenFam 0ℓ
+  Γ ⊨ ι = Γ NF⊢ ι
+  Γ ⊨ A ⊸ B = (_⊨ A ─✴ _⊨ B) Γ
+
+  module _ where
+    open Sem
+
+    evalSem : Sem _⊨_ _⊨_
+    evalSem .⟦var⟧ = id
+    evalSem .⟦⊸I⟧ = id
+    evalSem .⟦⊸E⟧ = eval✴
+
+    eval = sem evalSem
+
+  reify : ∀ A → ∀[ _⊨ A ⇒ _NF⊢ A ]
+  reflect : ∀ A → ∀[ _NE⊢ A ⇒ _⊨ A ]
+
+  reify ι v = v
+  reify (A ⊸ B) v = ⊸I $ reify B $
+    v .app✴ (consˡ (right (Pw.refl ≡.refl))) (reflect A (var (≡.refl ∷ [])))
+
+  reflect ι M = emb M
+  reflect (A ⊸ B) M .app✴ sp v =
+    reflect B (⊸E ([-,-]≈-comm sp ✴⟨ M , reify A v ⟩))
+
+  nbe : ∀[ _⊢_ ⇒ _NF⊢_ ]
+  nbe M = reify _ (eval (idᵉ (λ A → reflect A (var (≡.refl ∷ [])))) M)
