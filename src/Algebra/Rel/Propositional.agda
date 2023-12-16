@@ -24,6 +24,23 @@ module Algebra.Rel.Propositional where
       assoc : ∀ {w x y z} →
         ∃⟨ [ w ∙ x ]∼_ ∩ [_∙ y ]∼ z ⟩ ⇔ ∃⟨ [ x ∙ y ]∼_ ∩ [ w ∙_]∼ z ⟩
 
+    identityˡ→ : ∀ {x y} → ∃⟨ ε∼_ ∩ [_∙ x ]∼ y ⟩ → x ≡ y
+    identityˡ→ = identityˡ .Equivalence.f
+    identityˡ← : ∀ {x y} → x ≡ y → ∃⟨ ε∼_ ∩ [_∙ x ]∼ y ⟩
+    identityˡ← = identityˡ .Equivalence.g
+
+    identityʳ→ : ∀ {x y} → ∃⟨ ε∼_ ∩ [ x ∙_]∼ y ⟩ → x ≡ y
+    identityʳ→ = identityʳ .Equivalence.f
+    identityʳ← : ∀ {x y} → x ≡ y → ∃⟨ ε∼_ ∩ [ x ∙_]∼ y ⟩
+    identityʳ← = identityʳ .Equivalence.g
+
+    assoc→ : ∀ {w x y z} →
+      ∃⟨ [ w ∙ x ]∼_ ∩ [_∙ y ]∼ z ⟩ → ∃⟨ [ x ∙ y ]∼_ ∩ [ w ∙_]∼ z ⟩
+    assoc→ = assoc .Equivalence.f
+    assoc← : ∀ {w x y z} →
+      ∃⟨ [ x ∙ y ]∼_ ∩ [ w ∙_]∼ z ⟩ → ∃⟨ [ w ∙ x ]∼_ ∩ [_∙ y ]∼ z ⟩
+    assoc← = assoc .Equivalence.g
+
   -- Given the relational monoid operations, we can form the following
   -- combinators of Rel-monoid-indexed sets.
   -- Such families should form a monoidal category, with morphisms being
@@ -176,3 +193,12 @@ module Algebra.Rel.Propositional where
     open RelMonoid′ relMonoid′ public
     field
       comm→ : ∀ {T U} → ∀[ T ✴ U ⇒ U ✴ T ]
+
+  toC : RelCommutativeMonoid → RelCommutativeMonoid′
+  toC M = record
+    { relMonoid′ = to relMonoid
+    ; comm→ = λ { (⟨ t , u ⟩✴ a) → ⟨ u , t ⟩✴ comm→ a }
+    }
+    where
+    open RelCommutativeMonoid M
+    open Mult [_∙_]∼_
