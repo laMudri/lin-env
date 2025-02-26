@@ -311,21 +311,17 @@ module Modal.LnL where
 
     infix 40 _∋_ _∋l_ _∋i_
 
-    data _∋l_ : LCtx → Ty m → Set where
-      here : Γ ∼0 → Γ -, (m , S) ∋l S
+    data _∋l_ : LCtx → Ty lin → Set where
+      here : Γ ∼0 → Γ -, (lin , S) ∋l S
       there : Γ ∋l S → Γ -i X ∋l S
 
     data _∋i_ : ICtx → Ty int → Set where
       here : Θ -, X ∋i X
       there : Θ ∋i X → Θ -, Y ∋i X
 
-    _∋_ : Ctx m → Ty n → Set
-    _∋_ {lin} Γ S = Γ ∋l S
-    _∋_ {int} {n} Θ S = Σ[ q ∈ n ≡ int ] Θ ∋i ≡.subst Ty q S
-
-    data _∋′_ : ∀ {m n} → Ctx m → Ty n → Set where
-      lin : ∀ {n} {Γ : LCtx} {S : Ty n} → Γ ∋l S → _∋′_ {lin} Γ S
-      int : {Θ : ICtx} {X : Ty int} → Θ ∋i X → _∋′_ {int} Θ X
+    _∋_ : Ctx m → Ty m → Set
+    _∋_ {lin} Γ A = Γ ∋l A
+    _∋_ {int} Θ X = Θ ∋i X
 
   private
     variable
@@ -456,7 +452,7 @@ module Modal.LnL where
 
   lookup-i : ∀ {𝓥 : ICtx → Ty int → Set} →
     i[ 𝓥 ] Θ ⇒ᵉ Λ → _∋_ {int} Λ X → 𝓥 Θ X
-  lookup-i ρ (refl , i) = ρ .get i
+  lookup-i ρ i = ρ .get i
 
   lookup-l : ∀ {𝓥 : ∀ {m} → Ctx m → Ty m → Set} →
     l[ 𝓥 ] Γ ⇒ᵉ Δ → Δ ∋l A → 𝓥 Γ A
@@ -468,7 +464,7 @@ module Modal.LnL where
   lookup : ∀ {𝓥 : ∀ {m} → Ctx m → Ty m → Set} {Γ Δ : Ctx m} →
     [ 𝓥 ] Γ ⇒ᵉ Δ → Δ ∋ S → 𝓥 Γ S
   lookup {lin} ρ i = lookup-l ρ i
-  lookup {int} ρ (refl , i) = ρ .get i
+  lookup {int} ρ i = lookup-i ρ i
 
   ren^∋ : {S : Ty m} → Ren m (_∋ S)
   ren^∋ = lookup
@@ -495,43 +491,51 @@ module Modal.LnL where
     $ env-✴ (_ , ρ , sp)
 
   infixr 5 _,-_
-  infix 5 _++_
+  infix 5 _++l_ _++i_
 
   data CtxExt : Set where
     [] : CtxExt
     _,-_ : Ty int → CtxExt → CtxExt
 
-  _++_ : Ctx lin → CtxExt → Ctx lin
-  Γ ++ [] = Γ
-  Γ ++ (X ,- Ξ) = (Γ -i X) ++ Ξ
+  _++l_ : Ctx lin → CtxExt → Ctx lin
+  Γ ++l [] = Γ
+  Γ ++l (X ,- Ξ) = (Γ -i X) ++l Ξ
 
-  ++∼0 : ∀ {Γ} Ξ → Γ ∼0 → (Γ ++ Ξ) ∼0
-  ++∼0 [] sp = sp
-  ++∼0 (X ,- Ξ) sp = ++∼0 Ξ (sp -i*)
+  _++i_ : Ctx int → CtxExt → Ctx int
+  Θ ++i [] = Θ
+  Θ ++i (X ,- Ξ) = (Θ -, X) ++i Ξ
 
-  ++∼+ : ∀ {Γ Γl Γr} Ξ → Γ ∼[ Γl + Γr ] → (Γ ++ Ξ) ∼[ (Γl ++ Ξ) + (Γr ++ Ξ) ]
-  ++∼+ [] sp = sp
-  ++∼+ (X ,- Ξ) sp = ++∼+ Ξ (sp -i*)
+  ++l∼++i : ∀ {Γ Θ} Ξ → Γ ∼ Θ → (Γ ++l Ξ) ∼ (Θ ++i Ξ)
+  ++l∼++i [] sp = sp
+  ++l∼++i (X ,- Ξ) sp = ++l∼++i Ξ (sp -i*)
 
-  ++-there : ∀ {Γ} {A : Ty m} Ξ → Γ ∋l A → (Γ ++ Ξ) ∋l A
-  ++-there [] i = i
-  ++-there (X ,- Ξ) i = ++-there Ξ (there i)
+  ++l∼0 : ∀ {Γ} Ξ → Γ ∼0 → (Γ ++l Ξ) ∼0
+  ++l∼0 [] sp = sp
+  ++l∼0 (X ,- Ξ) sp = ++l∼0 Ξ (sp -i*)
 
-  ∋l⇒∋i : Γ ∼ Θ → Γ ∋l X → Θ ∋i X
-  ∋l⇒∋i (rel -i*) (here sp0) = here
-  ∋l⇒∋i (rel -i*) (there i) = there (∋l⇒∋i rel i)
+  ++l∼+ : ∀ {Γ Γl Γr} Ξ → Γ ∼[ Γl + Γr ] → (Γ ++l Ξ) ∼[ (Γl ++l Ξ) + (Γr ++l Ξ) ]
+  ++l∼+ [] sp = sp
+  ++l∼+ (X ,- Ξ) sp = ++l∼+ Ξ (sp -i*)
 
-  id+ext-lᵉ : (∀ {m Γ} → Γ ∋_ ⊆ 𝓥 {m} Γ) → ∀ {Γ} Ξ → l[ 𝓥 ] Γ ++ Ξ ⇒ᵉ Γ
-  id+ext-lᵉ pure {[]} Ξ = [] (++∼0 Ξ [] ✴⟨⟩)
+  ++l-there : ∀ {Γ A} Ξ → Γ ∋l A → (Γ ++l Ξ) ∋l A
+  ++l-there [] i = i
+  ++l-there (X ,- Ξ) i = ++l-there Ξ (there i)
+
+  ++i-there : ∀ {Θ X} Ξ → Θ ∋i X → (Θ ++i Ξ) ∋i X
+  ++i-there [] i = i
+  ++i-there (X ,- Ξ) i = ++i-there Ξ (there i)
+
+  id+ext-lᵉ : (∀ {m Γ} → Γ ∋_ ⊆ 𝓥 {m} Γ) → ∀ {Γ} Ξ → l[ 𝓥 ] Γ ++l Ξ ⇒ᵉ Γ
+  id+ext-lᵉ pure {[]} Ξ = [] (++l∼0 Ξ [] ✴⟨⟩)
   id+ext-lᵉ pure {Γ -l A} Ξ =
     let _ , sp+ , sp0 = identityʳ← refl-≈ in
-    snoc-l (++∼+ Ξ (sp+ -lʳ) ✴⟨ id+ext-lᵉ pure Ξ , pure (++-there Ξ (here sp0)) ⟩)
+    snoc-l (++l∼+ Ξ (sp+ -lʳ) ✴⟨ id+ext-lᵉ pure Ξ , pure (++l-there Ξ (here sp0)) ⟩)
   id+ext-lᵉ pure {Γ -i X} Ξ =
     let _ , sp+ , sp0 = identityʳ← {Γ = Γ} refl-≈ in
-    let sp0′ = 0→∼ (++∼0 (X ,- Ξ) sp0) in
-    snoc-i $ ++∼+ Ξ (sp+ -i*)
+    let sp0′ = ++l∼++i (X ,- Ξ) (0→∼ sp0) in
+    snoc-i $ ++l∼+ Ξ (sp+ -i*)
       ✴⟨ id+ext-lᵉ pure (X ,- Ξ)
-      , sp0′ F⟨ pure (refl , ∋l⇒∋i sp0′ (++-there Ξ (here sp0))) ⟩
+      , sp0′ F⟨ pure (++i-there Ξ here) ⟩
       ⟩
 
   id-lᵉ : (∀ {m Γ} → Γ ∋_ ⊆ 𝓥 {m} Γ) → ∀ {Γ} → l[ 𝓥 ] Γ ⇒ᵉ Γ
@@ -545,8 +549,8 @@ module Modal.LnL where
     iter-lᵉ (λ Γ Δ → Γ -i X l⇒ʳ Δ)
       (λ { (sp ✴⟨⟩) → [] (sp -i* ✴⟨⟩) })
       (λ { (sp ✴⟨ ρ , v ⟩) → snoc-l (sp -i* ✴⟨ ρ , there v ⟩) })
-      (λ { (sp ✴⟨ ρ , rel F⟨ refl , v ⟩ ⟩) →
-        snoc-i (sp -i* ✴⟨ ρ , rel -i* F⟨ refl , there v ⟩ ⟩) })
+      (λ { (sp ✴⟨ ρ , rel F⟨ v ⟩ ⟩) →
+        snoc-i (sp -i* ✴⟨ ρ , rel -i* F⟨ there v ⟩ ⟩) })
       ρ
 
   there-iʳ : Θ i⇒ʳ Λ → Θ -, X i⇒ʳ Λ
@@ -633,7 +637,7 @@ module Modal.LnL where
   lift-iᵉ : ∀ {𝓥} → (∀ {X} → Ren int ([ 𝓥 ]_⊨ X)) → ∀[ _∋i_ ⇒ 𝓥 ] →
     i[ 𝓥 ] Θ ⇒ᵉ Λ → i[ 𝓥 ] Θ -, X ⇒ᵉ Λ -, X
   lift-iᵉ ren pure ρ .get here = pure here
-  lift-iᵉ ren pure ρ .get (there i) = ren [(λ i → refl , there i)] (ρ .get i)
+  lift-iᵉ ren pure ρ .get (there i) = ren [ there ] (ρ .get i)
 
   -- Can't use ren^✴ &c because of termination checking.
   ren^n⊢ : ∀ {m n Γ Δ} {S : Ty m} → Γ ⇒ʳ Δ → [ n ] Δ n⊢ S → [ n ] Γ n⊢ S
@@ -648,7 +652,7 @@ module Modal.LnL where
   ren^n⊢ ρ (×Er M) = ×Er (ren^n⊢ ρ M)
   ren^n⊢ ρ (→E (M , N)) = →E (ren^n⊢ ρ M , ren^n⊢ ρ N)
   ren^n⊢ ρ (FE (sp ✴⟨ M , N ⟩)) = FE ∘
-    map-✴ (λ σ → ren^n⊢ σ M) (λ τ → ren^n⊢ (lift-lᵉi ren^∋ (refl ,_) τ) N)
+    map-✴ (λ σ → ren^n⊢ σ M) (λ τ → ren^n⊢ (lift-lᵉi ren^∋ id τ) N)
     $ env-✴ (_ , ρ , sp)
   ren^n⊢ ρ (GE (rel F⟨ M ⟩)) =
     GE ∘ map-F (λ σ → ren^n⊢ σ M) $ env-F (_ , ρ , rel)
@@ -656,7 +660,7 @@ module Modal.LnL where
     ⊗I ∘ map-✴ (λ σ → ren^n⊢ σ M) (λ τ → ren^n⊢ τ N) $ env-✴ (_ , ρ , sp)
   ren^n⊢ ρ (⊸I M) = ⊸I (ren^n⊢ (lift-lᵉl id ρ) M)
   ren^n⊢ ρ (×I (M , N)) = ×I (ren^n⊢ ρ M , ren^n⊢ ρ N)
-  ren^n⊢ ρ (→I M) = →I (ren^n⊢ (lift-iᵉ ren^∋ (refl ,_) ρ) M)
+  ren^n⊢ ρ (→I M) = →I (ren^n⊢ (lift-iᵉ ren^∋ id ρ) M)
   ren^n⊢ ρ (FI (rel F⟨ M ⟩)) =
     FI ∘ map-F (λ σ → ren^n⊢ σ M) $ env-F (_ , ρ , rel)
   ren^n⊢ ρ (GI (rel G⟨ M ⟩)) =
@@ -695,7 +699,7 @@ module Modal.LnL where
     ⊸I (reify B (n id-lʳ .app✴ (sp+ -lʳ) (reflect A (var (here sp0)))))
   reify (X ×i Y) (m , n) = ×I (reify X m , reify Y n)
   reify (X →i Y) n =
-    →I (reify Y (n [ there ] (reflect X (var (refl , here)))))
+    →I (reify Y (n [ there ] (reflect X (var here))))
   reify (Fl X) (inj₁ fm) = FI (map-F (reify X) fm)
   reify (Fl X) (inj₂ N) = emb F-noη N
   reify (Gi A) (rel G⟨ n ⟩) = GI (rel G⟨ reify A n ⟩)
@@ -707,7 +711,7 @@ module Modal.LnL where
     reflect B (⊸E (sp+ ✴⟨ ren^n⊢ ρ M , reify A n ⟩))
   reflect (X ×i Y) M = reflect X (×El M) , reflect Y (×Er M)
   reflect (X →i Y) M ρ n =
-    reflect Y (→E (ren^n⊢ (map-iᵉ (refl ,_) ρ) M , reify X n))
+    reflect Y (→E (ren^n⊢ ρ M , reify X n))
   reflect (Fl X) M = inj₂ M
   reflect (Gi A) M =
     let _ , rel = ∼-total← _ in
@@ -728,7 +732,7 @@ module Modal.LnL where
     let _ , sp+ , sp0 = identityʳ← refl-≈ in
     reflect C $ FE $′ sp ✴⟨ M ,
       reify C $ n (there-lʳ id-lʳ)
-        .app✴ (sp+ -i*) (0→∼ sp0 -i* F⟨ reflect X (var (refl , here)) ⟩) ⟩
+        .app✴ (sp+ -i*) (0→∼ sp0 -i* F⟨ reflect X (var here) ⟩) ⟩
 
   eval : ∀ {m Γ Δ} {S : Ty m} → [ _⊨_ ] Γ ⇒ᵉ Δ → Δ ⊢ S ⇒ Γ ⊨ S
   eval ρ (var i) = lookup ρ i
@@ -750,7 +754,7 @@ module Modal.LnL where
   eval ρ (×El M) = eval ρ M .proj₁
   eval ρ (×Er M) = eval ρ M .proj₂
   eval ρ (→I M) σ n =
-    eval (comp-iᵉ (λ ([ τ ]) {X} → ren^⊨ X [(λ v → refl , τ v)]) σ ρ -,ᵉ n) M
+    eval (comp-iᵉ (λ ([ τ ]) {X} → ren^⊨ X [ τ ]) σ ρ -,ᵉ n) M
   eval ρ (→E (M , N)) = (eval ρ M) (id-iᵉ id) (eval ρ N)
   eval ρ (FI (rel F⟨ M ⟩)) = inj₁ (map-F (λ σ → eval σ M) $ env-F (_ , ρ , rel))
   eval {S = C} ρ (FE (sp ✴⟨ M , N ⟩)) =
